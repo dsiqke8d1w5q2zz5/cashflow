@@ -1661,39 +1661,6 @@ function _syncPassiveSourceToIncome(rocYear, source) {
     }
 }
 
-// 股利資料 → 收入分類同步（delta: +1 新增 / -1 刪除）
-function _parseDividendDate(dateStr) {
-    if (!dateStr) return null;
-    var d = new Date(dateStr);
-    if (isNaN(d.getTime())) return null;
-    return { rocYear: String(d.getFullYear() - 1911), month: d.getMonth() + 1 };
-}
-function _applyDividendToIncome(dateStr, cash, delta) {
-    if (!cash || cash <= 0) return false;
-    var d = _parseDividendDate(dateStr);
-    if (!d) return false;
-    var cats = DATA.settings.incomeCategories || [];
-    var hasDiv = cats.some(function(c){ return (typeof c === 'string' ? c : c.name) === '股利'; });
-    if (!hasDiv) {
-        DATA.settings.incomeCategories.push('股利');
-        (DATA.settings.years || []).forEach(function(y){
-            if (!DATA.income[y]) DATA.income[y] = {};
-            if (DATA.income[y]['股利'] === undefined) DATA.income[y]['股利'] = _emptyMonths();
-        });
-    }
-    if (!DATA.income[d.rocYear]) DATA.income[d.rocYear] = {};
-    DATA.income[d.rocYear]['股利'] = _ensureMonths(DATA.income[d.rocYear]['股利']);
-    var cur = DATA.income[d.rocYear]['股利'][d.month] || 0;
-    var next = cur + delta * cash;
-    if (next < 0) {
-        if (typeof showToast === 'function') showToast('收入股利已被手動調整，此次未同步扣除', 'warn', 4000);
-        return false;
-    }
-    DATA.income[d.rocYear]['股利'][d.month] = next;
-    saveData();
-    return true;
-}
-
 function calcDailyRate(section, cat, years, viewYear) {
     var ys = years.slice().sort();
     var last = viewYear || ys[ys.length - 1];
