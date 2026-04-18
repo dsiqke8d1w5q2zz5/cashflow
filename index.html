@@ -48,7 +48,7 @@ body {
 }
 .top-fixed {
     position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
-    width: calc(100% - 16px); max-width: 861px; z-index: 100;
+    width: calc(100% - 16px); max-width: 1181px; z-index: 100;
     background: var(--bg);
     border-radius: var(--radius);
     overflow: hidden;
@@ -119,7 +119,7 @@ body::before {
 }
 body { padding-top: 160px; }
 .tab-bar-wrap {
-    max-width: 860px;
+    max-width: 1180px;
     margin: 0 auto;
     padding: 8px 14px 10px 14px;
 }
@@ -167,7 +167,7 @@ body { padding-top: 160px; }
     background: linear-gradient(90deg, var(--lux-gold), var(--lux-gold-light), var(--lux-gold));
 }
 
-.container { width: calc(100% - 16px); max-width: 860px; margin: 0 auto; padding: 10px 0; }
+.container { width: calc(100% - 16px); max-width: 1180px; margin: 0 auto; padding: 10px 0; }
 
 .summary-cards {
     display: grid;
@@ -1849,13 +1849,13 @@ function renderIncomeExpense(section) {
     var MONTH_LABELS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
     // 表格：橫列=分類、縱欄=12 個月 + 年合計
-    html += '<div class="table-wrap" style="overflow-x:auto"><table><thead><tr><th style="min-width:110px">項目</th>';
+    html += '<div class="table-wrap" style="overflow-x:auto"><table style="table-layout:fixed;width:100%"><thead><tr><th style="width:80px">項目</th>';
     for (var m = 1; m <= 12; m++) {
         var sortActive = sortState.col === 'month' && sortState.year === curY && sortState.month === m;
-        html += '<th class="sortable' + (sortActive?' sort-active':'') + '" style="min-width:82px" onclick="toggleSortMonth(' + m + ')">' + MONTH_LABELS[m-1] + sortArrowMonth(m) + '</th>';
+        html += '<th class="sortable' + (sortActive?' sort-active':'') + '" style="width:68px" onclick="toggleSortMonth(' + m + ')">' + MONTH_LABELS[m-1] + sortArrowMonth(m) + '</th>';
     }
     var yActive = sortState.col === 'year' && sortState.year === curY;
-    html += '<th class="sortable' + (yActive?' sort-active':'') + '" style="min-width:110px;font-weight:700" onclick="toggleSort(\'year\',\'' + curY + '\')">年度合計' + sortArrow('year', curY) + '</th>';
+    html += '<th class="sortable' + (yActive?' sort-active':'') + '" style="width:100px;font-weight:700" onclick="toggleSort(\'year\',\'' + curY + '\')">年度合計' + sortArrow('year', curY) + '</th>';
     html += '</tr></thead><tbody>';
 
     var sortedCats = sortCatsForMonth(section, cats, curY);
