@@ -261,11 +261,16 @@ tfoot td:first-child { text-align: left; }
 
 .editable {
     cursor: pointer;
+    display: inline-block;
+    box-sizing: border-box;
     border-radius: 4px;
     padding: 2px 6px;
-    transition: .15s;
+    border: 2px solid transparent;
+    transition: background .15s, border-color .15s;
+    min-width: 50px;
+    text-align: right;
 }
-.editable:hover { background: #FFFBF0; }
+.editable:hover { background: #FFFBF0; border-color: rgba(200,164,90,.3); }
 .edit-input {
     width: 100px;
     padding: 6px 10px;
@@ -1668,18 +1673,40 @@ function _applyDividendToIncome(dateStr, cash, delta) {
     return true;
 }
 
-function calcDailyRate(section, cat, years) {
+function calcDailyRate(section, cat, years, viewYear) {
     var ys = years.slice().sort();
-    var last = ys[ys.length - 1];
-    var prev = ys.length > 1 ? ys[ys.length - 2] : null;
+    var last = viewYear || ys[ys.length - 1];
+    var prev = null;
+    var idx = ys.indexOf(last);
+    if (idx > 0) prev = ys[idx - 1];
     if (!prev) return null;
-    var curVal = sumCategoryYear(section, last, cat);
-    var prevVal = sumCategoryYear(section, prev, cat);
-    var curYear = parseInt(last) + 1911;
-    var prevYear = parseInt(prev) + 1911;
+    function _sumUpToMonth(sec, y, c, uptoMonth) {
+        var obj = DATA[sec][y];
+        if (!obj) return 0;
+        var cats = c ? [c] : Object.keys(obj);
+        var total = 0;
+        cats.forEach(function(cname) {
+            var entry = obj[cname];
+            if (!entry) return;
+            if (typeof entry === 'number') { if (uptoMonth >= 1) total += entry; return; }
+            for (var m = 1; m <= uptoMonth; m++) total += (Number(entry[m]) || 0);
+        });
+        return total;
+    }
+    var curYearCE = parseInt(last) + 1911;
     var now = new Date();
-    var curDays = (curYear === now.getFullYear()) ? dayOfYear(now) : daysInYear(curYear);
-    var prevDays = daysInYear(prevYear);
+    var isCurrentYear = curYearCE === now.getFullYear();
+    var uptoMonth = isCurrentYear ? (now.getMonth() + 1) : 12;
+    var uptoDay = isCurrentYear ? now.getDate() : 31;
+    var curVal = _sumUpToMonth(section, last, cat, uptoMonth);
+    var prevVal = _sumUpToMonth(section, prev, cat, uptoMonth);
+    function _dayOfY(year, mm, dd) {
+        var d = new Date(year, mm - 1, dd);
+        var start = new Date(year, 0, 0);
+        return Math.floor((d - start) / 86400000);
+    }
+    var curDays = _dayOfY(curYearCE, uptoMonth, uptoDay);
+    var prevDays = _dayOfY(curYearCE - 1, uptoMonth, uptoDay);
     if (prevVal === 0) {
         if (curVal === 0) return 0;
         return null;
@@ -1843,6 +1870,9 @@ function renderIncomeExpense(section) {
     html += '</select>';
     html += '<button class="btn-add" onclick="manageCategories(\'' + section + '\')"><i class="ti ti-list-details"></i> 管理項目</button>';
     html += '<button class="btn-add" onclick="manageYears()"><i class="ti ti-list-details"></i> 管理年份</button>';
+    var recurFn = section === 'income' ? 'manageIncomeRecurring' : 'manageExpenseRecurring';
+    var recurLabel = section === 'income' ? '定期收入' : '定期支出';
+    html += '<button class="btn-add" onclick="' + recurFn + '()"><i class="ti ti-repeat"></i> ' + recurLabel + '</button>';
     html += '<button class="toggle-archive' + (showArchived?' active':'') + '" onclick="toggleShowArchived()">' + (showArchived?'隱藏封存':'顯示封存') + '</button>';
     html += '</div>';
 
@@ -1872,14 +1902,26 @@ function renderIncomeExpense(section) {
             }
         }
         var yearTotal = sumCategoryYear(section, curY, cat);
-        html += '<td style="font-weight:700;color:#1a1a1a">' + fmt(yearTotal) + '</td>';
+        var yoy = calcDailyRate(section, cat, years, curY);
+        var yoyHtml = '';
+        if (yoy !== null && !isNaN(yoy)) {
+            var color = yoy >= 0 ? 'var(--green)' : 'var(--red)';
+            yoyHtml = '<br><span style="font-size:11px;font-weight:400;color:' + color + '">' + (yoy >= 0 ? '+' : '') + yoy.toFixed(1) + '%</span>';
+        }
+        html += '<td style="font-weight:700;color:#1a1a1a">' + fmt(yearTotal) + yoyHtml + '</td>';
         html += '</tr>';
     });
     html += '</tbody><tfoot><tr><td>月合計</td>';
     for (var m = 1; m <= 12; m++) {
         html += '<td style="font-weight:700">' + fmt(sumMonth(section, curY, m)) + '</td>';
     }
-    html += '<td style="font-weight:700;color:var(--lux-navy)">' + fmt(sumYear(section, curY)) + '</td>';
+    var yoyAll = calcDailyRate(section, null, years, curY);
+    var yoyAllHtml = '';
+    if (yoyAll !== null && !isNaN(yoyAll)) {
+        var colorAll = yoyAll >= 0 ? 'var(--green)' : 'var(--red)';
+        yoyAllHtml = '<br><span style="font-size:11px;font-weight:400;color:' + colorAll + '">' + (yoyAll >= 0 ? '+' : '') + yoyAll.toFixed(1) + '%</span>';
+    }
+    html += '<td style="font-weight:700;color:var(--lux-navy)">' + fmt(sumYear(section, curY)) + yoyAllHtml + '</td>';
     html += '</tr></tfoot></table></div>';
 
     container.innerHTML = html;
@@ -2396,17 +2438,26 @@ function runRecurringAutoPost() {
     msg += '<i class="ti ti-alert-triangle"></i> 補記會【累加】到被動收入目前的數字上，不會覆蓋\n\n';
     msg += '按【補記全部】將全部加進被動收入\n按【跳過這批】以後不再提示這幾個月份';
     showConfirm2(msg, function onYes() {
-        // 補記
+        // 補記到對應 tab
         pending.forEach(function(p) {
-            _ensurePassiveSlot(p.rocYear, p.rule.source);
-            DATA.passive[p.rocYear][p.rule.source][p.month] =
-                (DATA.passive[p.rocYear][p.rule.source][p.month] || 0) + p.amount;
+            var tab = p.rule.tab || 'passive';
+            if (tab === 'passive') {
+                _ensurePassiveSlot(p.rocYear, p.rule.source);
+                DATA.passive[p.rocYear][p.rule.source][p.month] =
+                    (DATA.passive[p.rocYear][p.rule.source][p.month] || 0) + p.amount;
+            } else if (tab === 'income' || tab === 'expense') {
+                var section = tab; // 'income' | 'expense'
+                if (!DATA[section][p.rocYear]) DATA[section][p.rocYear] = {};
+                DATA[section][p.rocYear][p.rule.source] = _ensureMonths(DATA[section][p.rocYear][p.rule.source]);
+                DATA[section][p.rocYear][p.rule.source][p.month] =
+                    (DATA[section][p.rocYear][p.rule.source][p.month] || 0) + p.amount;
+            }
             if (!p.rule.processedMonths) p.rule.processedMonths = [];
             p.rule.processedMonths.push(_monthKey(p.rocYear, p.month));
         });
         saveData();
         render();
-        toast('已補記 ' + pending.length + ' 筆定期收入');
+        toast('已補記 ' + pending.length + ' 筆定期項目');
     }, function onNo() {
         // 跳過這批：記在 skippedMonths，下次不再問
         pending.forEach(function(p) {
@@ -2418,12 +2469,22 @@ function runRecurringAutoPost() {
 }
 
 // ── 管理介面 modal ──
-function manageRecurring() {
+function manageRecurring() { _manageRecurringByTab('passive'); }
+function manageIncomeRecurring() { _manageRecurringByTab('income'); }
+function manageExpenseRecurring() { _manageRecurringByTab('expense'); }
+
+function _manageRecurringByTab(tab) {
+    var titles = { passive: '定期被動收入管理', income: '定期收入管理', expense: '定期支出管理' };
+    var hints = {
+        passive: '設定每月固定的被動收入（例如借款、代管），開啟網頁時會自動補記到被動收入對應月份。',
+        income: '設定每月固定收入（例如薪資、津貼），開啟網頁時會自動補記到收入對應月份。',
+        expense: '設定每月固定支出（例如房租、保費、訂閱費），開啟網頁時會自動補記到支出對應月份。'
+    };
     var ov = document.createElement('div');
     ov.className = 'overlay';
-    var list = DATA.recurring || [];
-    var html = '<div class="modal" style="width:480px;max-width:94vw"><h3><i class="ti ti-repeat"></i> 定期收入管理</h3>';
-    html += '<p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">設定每月固定的被動收入（例如借款、代管），開啟網頁時會自動補記到被動收入對應月份。</p>';
+    var list = (DATA.recurring || []).filter(function(r){ return (r.tab || 'passive') === tab; });
+    var html = '<div class="modal" style="width:480px;max-width:94vw"><h3><i class="ti ti-repeat"></i> ' + titles[tab] + '</h3>';
+    html += '<p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">' + hints[tab] + '</p>';
     if (list.length === 0) {
         html += '<div style="text-align:center;padding:24px 0;color:var(--muted);font-size:13px">目前沒有任何定期收入循環</div>';
     } else {
@@ -2447,29 +2508,35 @@ function manageRecurring() {
         });
         html += '</div>';
     }
-    html += '<div style="margin-top:12px"><button onclick="this.closest(\'.overlay\').remove();addRecurring()" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--lux-navy);color:white;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">＋ 新增循環</button></div>';
+    html += '<div style="margin-top:12px"><button onclick="this.closest(\'.overlay\').remove();_addRecurringForTab(\'' + tab + '\')" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--lux-navy);color:white;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">＋ 新增循環</button></div>';
     html += '<div style="margin-top:8px"><button onclick="this.closest(\'.overlay\').remove()" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px;cursor:pointer;font-family:inherit">關閉</button></div></div>';
     ov.innerHTML = html;
     document.body.appendChild(ov);
     // 已移除點空白關閉行為（避免誤觸）
 }
 
-// 新增/編輯共用表單
-function _recurringForm(existing) {
+// 新增/編輯共用表單（tab: 'passive' | 'income' | 'expense'）
+function _recurringForm(existing, tab) {
+    tab = tab || (existing && existing.tab) || 'passive';
     var ov = document.createElement('div');
     ov.className = 'overlay';
-    var sourcesHtml = (DATA.settings.passiveSources || []).map(function(s){
-        var name = typeof s === 'string' ? s : s.name;
+    // 根據 tab 決定「來源」選單資料
+    var sourceList;
+    if (tab === 'passive') sourceList = (DATA.settings.passiveSources || []).map(function(s){ return typeof s === 'string' ? s : s.name; });
+    else if (tab === 'income') sourceList = (DATA.settings.incomeCategories || []).map(function(c){ return typeof c === 'string' ? c : c.name; });
+    else sourceList = (DATA.settings.expenseCategories || []).map(function(c){ return typeof c === 'string' ? c : c.name; });
+    var sourcesHtml = sourceList.map(function(name){
         var sel = (existing && existing.source === name) ? ' selected' : '';
         return '<option value="' + esc(name) + '"' + sel + '>' + esc(name) + '</option>';
     }).join('');
+    var sourceLabel = { passive: '被動收入來源', income: '收入分類', expense: '支出分類' }[tab];
     var today = new Date().toISOString().slice(0,10);
     var title = existing ? '編輯循環' : '新增循環';
     var html = '<div class="modal"><h3>' + title + '</h3>';
-    html += '<label style="font-size:12px;color:var(--muted)">收入來源</label>';
+    html += '<label style="font-size:12px;color:var(--muted)">' + sourceLabel + '</label>';
     html += '<select id="rec-source">' + sourcesHtml + '</select>';
-    html += '<label style="font-size:12px;color:var(--muted)">別名（給你看的名字，例如「馥華松苑」）</label>';
-    html += '<input type="text" id="rec-label" placeholder="選填" value="' + esc(existing?existing.label:'') + '">';
+    html += '<label style="font-size:12px;color:var(--muted)">別名（選填）</label>';
+    html += '<input type="text" id="rec-label" placeholder="給你看的名字" value="' + esc(existing?existing.label:'') + '">';
     html += '<label style="font-size:12px;color:var(--muted)">金額（元）</label>';
     html += '<input type="number" id="rec-amount" placeholder="0" step="1" value="' + (existing?existing.amount:'') + '">';
     html += '<label style="font-size:12px;color:var(--muted)">每月日期（1-31）</label>';
@@ -2491,7 +2558,7 @@ function _recurringForm(existing) {
         var day = parseInt(document.getElementById('rec-day').value, 10);
         var startDate = document.getElementById('rec-start').value.trim();
         var endDate = document.getElementById('rec-end').value.trim() || null;
-        if (!source) { toast('請選擇來源', true); return; }
+        if (!source) { toast('請選擇分類', true); return; }
         if (amount <= 0) { toast('請輸入金額', true); return; }
         if (isNaN(day) || day < 1 || day > 31) { toast('請輸入有效的日期（1-31）', true); return; }
         if (!_parseYMD(startDate)) { toast('開始日期格式錯誤', true); return; }
@@ -2507,7 +2574,7 @@ function _recurringForm(existing) {
             if (!DATA.recurring) DATA.recurring = [];
             DATA.recurring.push({
                 id: 'r_' + Date.now() + '_' + Math.floor(Math.random()*1000),
-                tab: 'passive',
+                tab: tab,
                 source: source,
                 label: label,
                 amount: amount,
@@ -2521,21 +2588,20 @@ function _recurringForm(existing) {
         }
         saveData();
         ov.remove();
-        manageRecurring();
+        _manageRecurringByTab(tab);
         toast(existing?'已更新循環':'已新增循環');
     };
-    // 已移除點空白關閉行為（避免誤觸）
 }
 
-function addRecurring() { _recurringForm(null); }
+function _addRecurringForTab(tab) { _recurringForm(null, tab); }
+function addRecurring() { _recurringForm(null, 'passive'); }
 
 function editRecurring(id) {
     var r = (DATA.recurring || []).find(function(x){ return x.id === id; });
     if (!r) return;
-    // 關閉當前管理 modal（若有）
     var cur = document.querySelector('.overlay');
     if (cur) cur.remove();
-    _recurringForm(r);
+    _recurringForm(r, r.tab || 'passive');
 }
 
 function toggleRecurring(id) {
@@ -2543,21 +2609,21 @@ function toggleRecurring(id) {
     if (!r) return;
     r.active = !r.active;
     saveData();
-    // 重繪管理介面
     var cur = document.querySelector('.overlay');
     if (cur) cur.remove();
-    manageRecurring();
+    _manageRecurringByTab(r.tab || 'passive');
 }
 
 function deleteRecurring(id) {
     var r = (DATA.recurring || []).find(function(x){ return x.id === id; });
     if (!r) return;
+    var tab = r.tab || 'passive';
     showConfirm('確定刪除循環「' + (r.label || r.source) + '」？\n\n此動作不會影響已經記錄的過去數據。', function() {
         DATA.recurring = DATA.recurring.filter(function(x){ return x.id !== id; });
         saveData();
         var cur = document.querySelector('.overlay');
         if (cur) cur.remove();
-        manageRecurring();
+        _manageRecurringByTab(tab);
     });
 }
 
@@ -3038,8 +3104,8 @@ var STOCK_COLUMNS = [
     { key: 'market',   label: '現值',     default: true },
     { key: 'pl',       label: '損益',     default: true },
     { key: 'rate',     label: '報酬率',   default: true },
-    { key: 'dayPL',    label: '今日損益', default: false },
-    { key: 'weight',   label: '佔比',     default: false }
+    { key: 'dayPL',    label: '今日損益', default: true },
+    { key: 'weight',   label: '佔比',     default: true }
 ];
 var _stockColVisible = null;
 function getStockColVisible() {
