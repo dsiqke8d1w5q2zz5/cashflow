@@ -1274,14 +1274,20 @@ th.sortable.sort-active .sort-arrow { color: var(--lux-gold); font-weight: 700; 
     <h1>CashFlow</h1>
     <div class="header-btns">
         <span id="last-edit" style="color:rgba(255,255,255,.85);font-size:12px;margin-right:8px"></span>
-        <span id="last-export" style="color:rgba(255,255,255,.85);font-size:12px;margin-right:4px"></span>
         <span id="cloudStatus" style="color:rgba(255,255,255,.85);font-size:12px;margin-right:8px"></span>
-        <button onclick="cloudSyncNow()" title="立即同步到雲端">雲端</button>
-        <button onclick="cloudRestore({force:true})" title="從雲端強制還原">雲端還原</button>
-        <button onclick="exportData()">匯出</button>
-        <button onclick="document.getElementById('importFile').click()">匯入</button>
-        <button onclick="showRestoreDialog()" title="從自動快照還原台股資料">還原</button>
-        <button onclick="showConfirm2('確定清除本機所有資料？\n清除後此裝置的資料將無法復原。',function(){localStorage.clear();location.reload();},null,{title:'清除資料',okText:'確定清除',okStyle:'background:var(--red)'})" style="background:rgba(200,50,50,.3);border-color:rgba(200,100,100,.5)" title="清除此裝置的所有資料">清除</button>
+        <button onclick="cloudSyncNow()" title="立即上傳到雲端">立即同步</button>
+        <button onclick="cloudRestore({force:true})" title="從雲端下載資料覆蓋本機">雲端下載</button>
+        <button onclick="exportData()" title="匯出 JSON / Excel 備份檔">匯出備份</button>
+        <button onclick="document.getElementById('importFile').click()" title="從備份檔還原">匯入備份</button>
+        <div style="position:relative;display:inline-block">
+            <button onclick="toggleSettingsMenu(event)" title="進階設定" style="padding-left:10px;padding-right:10px"><i class="ti ti-settings" style="font-size:16px"></i></button>
+            <div id="settingsMenu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:180px;z-index:200;overflow:hidden">
+                <button onclick="closeSettingsMenu();showConfirm2('確定清除本機所有資料？\n清除後此裝置的資料將無法復原（但雲端仍保留，可再用雲端下載還原）。',function(){localStorage.clear();location.reload();},null,{title:'清除本機資料',okText:'確定清除',okStyle:'background:var(--red)'})" style="display:block;width:100%;padding:10px 14px;border:none;background:none;text-align:left;cursor:pointer;color:var(--red);font-size:13px;font-family:inherit">
+                    <i class="ti ti-trash"></i> 清除本機資料
+                </button>
+            </div>
+        </div>
+        <span id="last-export" style="display:none"></span>
         <input type="file" id="importFile" accept=".json,.xlsx" style="display:none" onchange="importData(event)">
     </div>
 </div>
@@ -1556,6 +1562,25 @@ function cloudRestore(opts) {
 // 開頁時自動拉雲端（但不強制覆蓋本機較新的資料）
 window.addEventListener('load', function() {
     setTimeout(function(){ cloudRestore(); }, 800);
+});
+
+// ===== Header 進階設定選單 =====
+function toggleSettingsMenu(e) {
+    if (e) e.stopPropagation();
+    var m = document.getElementById('settingsMenu');
+    if (!m) return;
+    m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+function closeSettingsMenu() {
+    var m = document.getElementById('settingsMenu');
+    if (m) m.style.display = 'none';
+}
+document.addEventListener('click', function(e) {
+    var m = document.getElementById('settingsMenu');
+    if (!m || m.style.display === 'none') return;
+    // 點在齒輪按鈕或選單內都不關
+    if (e.target.closest('#settingsMenu') || (e.target.closest('button') && e.target.closest('button').onclick && e.target.closest('button').onclick.toString().indexOf('toggleSettingsMenu') >= 0)) return;
+    m.style.display = 'none';
 });
 
 // ===== 全域 ENTER 鍵：所有 overlay 按 Enter = 觸發 .btn-primary =====
@@ -4328,6 +4353,7 @@ function renderStockHoldings() {
     html += '<button class="btn-refresh" id="btn-fetch-price" onclick="refreshPrices()"><i class="ti ti-antenna-bars-5"></i> 更新股價</button>';
     html += '<button class="btn-refresh" style="background:var(--lux-navy)" onclick="addHolding()">＋ 新增持股</button>';
     html += '<button class="btn-refresh" style="background:linear-gradient(135deg,#0f2847 0%,#1a3a5c 50%,#2a5a8c 100%);border:1px solid var(--lux-gold)" onclick="toggleStockColumn()"><i class="ti ti-columns"></i> 欄位</button>';
+    html += '<button class="btn-refresh" onclick="showRestoreDialog()" title="從自動快照還原台股資料"><i class="ti ti-history"></i> 還原快照</button>';
     if (stockData.lastUpdate) {
         html += '<span class="last-update">最後更新：' + esc(stockData.lastUpdate) + '</span>';
     }
