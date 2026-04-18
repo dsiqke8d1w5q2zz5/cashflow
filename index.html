@@ -1836,12 +1836,11 @@ function renderIncomeExpense(section) {
 
     // 工具列
     html += '<div class="toolbar">';
-    html += '<div class="year-switcher" style="display:inline-flex;gap:6px;margin-right:12px">';
+    html += '<select class="year-select" onchange="selectIEYear(this.value)" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);font-weight:600;cursor:pointer;margin-right:12px;font-family:inherit;font-size:14px">';
     years.forEach(function(y){
-        var active = y === curY;
-        html += '<button class="year-btn' + (active?' active':'') + '" onclick="selectIEYear(\'' + esc(y) + '\')" style="padding:6px 12px;border-radius:8px;border:1px solid ' + (active?'var(--lux-gold)':'var(--border)') + ';background:' + (active?'var(--lux-navy)':'#fff') + ';color:' + (active?'#fff':'var(--text)') + ';cursor:pointer;font-weight:' + (active?'700':'500') + '">' + y + '年</button>';
+        html += '<option value="' + esc(y) + '"' + (y === curY ? ' selected' : '') + '>' + y + '年</option>';
     });
-    html += '</div>';
+    html += '</select>';
     html += '<button class="btn-add" onclick="manageCategories(\'' + section + '\')"><i class="ti ti-list-details"></i> 管理項目</button>';
     html += '<button class="btn-add" onclick="manageYears()"><i class="ti ti-list-details"></i> 管理年份</button>';
     html += '<button class="toggle-archive' + (showArchived?' active':'') + '" onclick="toggleShowArchived()">' + (showArchived?'隱藏封存':'顯示封存') + '</button>';
